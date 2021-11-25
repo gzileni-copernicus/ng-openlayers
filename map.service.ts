@@ -2,6 +2,7 @@ import { Injectable, EventEmitter } from '@angular/core';
 import { Map, View } from 'ol';
 import TileLayer from 'ol/layer/Tile';
 import OSM from 'ol/source/OSM';
+import XYZ from 'ol/source/XYZ';
 import Feature from 'ol/Feature';
 import Geolocation from 'ol/Geolocation';
 import Point from 'ol/geom/Point';
@@ -74,19 +75,34 @@ export class MapService {
   public init(target: any, center?: Array<number>, zoom?: number): void {
 
     this._setView(center, zoom);
-    this._setGeoLocation();
+
+    const key = 'hbIcHQEqGTLXws9lh3uW';
+    const attributions =
+      '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>';
+
+    const raster = new TileLayer({
+      source: new XYZ({
+        attributions: attributions,
+        url: 'https://api.maptiler.com/tiles/satellite/{z}/{x}/{y}.jpg?key=' + key,
+        maxZoom: 20,
+      }),
+    });
 
     this.map = new Map({
       controls: [],
       target: target,
-      layers: [
-        new TileLayer({
-          source: new OSM()
-        })
-      ],
+      layers: [raster],
       view: this.view
     });
 
+  }
+
+  /**
+   *
+   */
+  public get extent(): any {
+    return this.view.calculateExtent(this.map.getSize());
   }
 
   /**
@@ -127,6 +143,7 @@ export class MapService {
 
     this.view = new View({
       center: centerPos,
+      projection: 'EPSG:4326',
       zoom: zoomLevel
     })
   }

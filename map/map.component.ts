@@ -1,5 +1,8 @@
-import { Component, OnInit, ElementRef, ViewChild, OnDestroy } from '@angular/core';
-import { MapService } from '../map.service';
+import { Component, OnInit, ElementRef, ViewChild, OnDestroy, AfterViewInit } from '@angular/core';
+import { MapService } from '@ol/map.service';
+
+import { fromEvent } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'map',
@@ -15,8 +18,9 @@ export class MapComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
 
-    this.mapSvc.init(this.mapElement.nativeElement);
-    this.mapSvc.enableGeolocation(true);
+    fromEvent(window, 'resize').subscribe(() => {
+      this.mapSvc.resize();
+    });
 
     this.mapSvc.geolocation_position.subscribe(pos => {
       console.log('position: ' + pos);
@@ -41,8 +45,14 @@ export class MapComponent implements OnInit, OnDestroy {
     })
   }
 
+  ngAfterViewInit(): void {
+    this.mapSvc.init(this.mapElement.nativeElement);
+  }
+
   /** enable/disable geolocation */
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+
+  }
 
   /** zoomin to map */
   public onZoomIn() {

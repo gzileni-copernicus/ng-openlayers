@@ -1,14 +1,16 @@
-.map {
+#map {
   width: 100% !important;
   height: 100% !important;
   min-height: 320px;
   min-width: 540px;
-  position: absolute;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
 }
 
-.map-container {
-  width: 100%;
-  height: 100%;
+.tile {
+  position:absolute;
+  left:10px;
+  bottom:10px;
+  z-index:999;
 }
 
 .map .ol-zoom .ol-zoom-out {
@@ -38,6 +40,3 @@
   top: 232px;
 }
 
-.slider-margin {
-  margin: 10px;
-}
