@@ -42,17 +42,17 @@ export class MapComponent implements OnInit, OnDestroy {
     this.mapSvc.heighSubject.subscribe((height: number) => {
       this.mapElement.nativeElement.style.height = `${height}px`;
       this.mapSvc.resize();
-    })
+    });
+
   }
 
   ngAfterViewInit(): void {
     this.mapSvc.init(this.mapElement.nativeElement);
+    this.mapSvc.enableGeolocation(true);
   }
 
   /** enable/disable geolocation */
-  ngOnDestroy(): void {
-
-  }
+  ngOnDestroy(): void {}
 
   /** zoomin to map */
   public onZoomIn() {

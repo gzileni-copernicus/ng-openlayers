@@ -6,11 +6,16 @@ import XYZ from 'ol/source/XYZ';
 import Feature from 'ol/Feature';
 import Geolocation from 'ol/Geolocation';
 import Point from 'ol/geom/Point';
-import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
+import { Circle as CircleStyle, Fill, Stroke, Style, Icon } from 'ol/style';
+import MultiPoint from 'ol/geom/MultiPoint';
 import { Vector as VectorSource } from 'ol/source';
 import { Vector as VectorLayer } from 'ol/layer';
-
+import _ from 'lodash';
 import { Subject } from 'rxjs';
+import * as turf from '@turf/turf'
+
+const GEO_ICON = 'assets/img/dot_orange.png';
+const _ZOOMDEFAULT_ = 14;
 
 export interface GeolocationResult {
   accuracy: string;
@@ -37,8 +42,6 @@ export class MapService {
     speed: ''
   };
 
-  _ZOOMDEFAULT_: number = 7
-
   layerGeolocation!: any;
   sourceGeolocation!: any;
   isGeolocation: boolean = false;
@@ -48,17 +51,22 @@ export class MapService {
 
   view: View = new View({
     center: [0, 0],
-    zoom: this._ZOOMDEFAULT_
+    zoom: _ZOOMDEFAULT_
   });
 
-  geolocation = new Geolocation({});
+  geolocation: Geolocation = new Geolocation({});
   coordinates: any = null;
 
-  positionFeature!: any;
-  accuracyFeature!: any;
+  bboxLayer!: any;
 
   public geolocationSubject: any = new Subject();
   public heighSubject: any = new Subject();
+
+  public icon_source: any;
+  public icon_layer: any;
+  public icon_style!: Style;
+  public icon_icon!: Icon;
+  public icon_feature: any;
 
   constructor() {}
 
@@ -96,6 +104,8 @@ export class MapService {
       view: this.view
     });
 
+    this._initGeolocation();
+
   }
 
   /**
@@ -106,23 +116,79 @@ export class MapService {
   }
 
   /**
-   * set position cursor point
+   *
    */
-  private _setPositionPoint(): void {
-    this.positionFeature.setStyle(
-      new Style({
-        image: new CircleStyle({
-          radius: 6,
-          fill: new Fill({
-            color: '#3399CC',
-          }),
-          stroke: new Stroke({
-            color: '#fff',
-            width: 2,
-          }),
-        }),
-      })
-    );
+  public resetExtentCoordinates(): void {
+    if (this.bboxLayer != null || this.bboxLayer != undefined) {
+      this.map.removeLayer(this.bboxLayer);
+    }
+  }
+
+
+  private _createLayerIcon(visible?: boolean) {
+
+    /** Creazione dell'immagine per il radar */
+    this.icon_icon = new Icon({
+      src: GEO_ICON,
+      opacity: 0.7
+    });
+    this.icon_style = new Style({ image: this.icon_icon });
+
+    /** Aggiunta dell'icona alla feature */
+    this.icon_feature = new Feature();
+    this.icon_feature.setStyle(this.icon_style);
+
+    this.icon_source = new VectorSource({ features: [this.icon_feature] });
+    this.icon_layer = new VectorLayer({
+      source: this.icon_source,
+      zIndex: _.size(this.map.getLayers()) + 1
+    });
+
+    /** Aggiunta del layer alla mappa */
+    this.map.addLayer(this.icon_layer);
+
+    if (visible != null && visible != undefined) {
+      this.icon_layer.setVisible(visible);
+    }
+
+  }
+
+  private _setVisibleIconLayer(visible: boolean) {
+    if (this.icon_layer != null && this.icon_layer != undefined) {
+      this.icon_layer.setVisible(visible);
+    }
+  }
+
+  private _removeLayerIcon() {
+    if (this.icon_layer != null && this.icon_layer != undefined) {
+      this.icon_source.clear();
+      this.map.removeLayer(this.icon_layer);
+    }
+  }
+
+  /**
+   * upgrade new position and rotation radar
+   * @param position coordinates
+   * @param rotation radians rotation
+   */
+  public newPositionIcon(position: Array<number>, rotation: number) {
+    if (this.icon_feature != null && this.icon_feature != undefined) {
+      /** Spostamento dell'immagine radar in osm */
+      this.icon_feature.setGeometry(new Point([position[0], position[1]]));
+      /** Rotazione dell'immagine radar in radianti */
+      this.icon_icon.setRotation(rotation);
+    }
+  }
+
+  /**
+   *
+   */
+  public get extentPolygon(): any {
+    const geom: any = turf.bboxPolygon(this.extent);
+    const coordinates: Array<string> = _.map(geom.geometry.coordinates[0], (coords: Array<number>) => {
+      return coords.join(' ')
+    });
+    return coordinates.join();
   }
 
   /**
@@ -131,7 +197,7 @@ export class MapService {
   private _setView(center?: Array<number>, zoom?: number) {
 
     let centerPos: Array<number> = [0,0];
-    let zoomLevel: number = this._ZOOMDEFAULT_;
+    let zoomLevel: number = _ZOOMDEFAULT_;
 
     if (center != null && center != undefined) {
         centerPos = center;
@@ -149,25 +215,11 @@ export class MapService {
   }
 
   /**
-   * setup layer geolocation
+   * setupo geolocation
    */
-  private _setLayerGeolocation() {
+  private _initGeolocation() {
 
-    this.sourceGeolocation = new VectorSource({
-      features: [this.accuracyFeature, this.positionFeature],
-    });
-
-    this.layerGeolocation = new VectorLayer({
-      map: this.map,
-      source: this.sourceGeolocation,
-    });
-
-  }
-
-  /**
-   *
-   */
-  private _setGeoLocation() {
+    this._createLayerIcon(false);
 
     this.geolocation = new Geolocation({
       /** enableHighAccuracy must be set to true to have the heading value. */
@@ -177,37 +229,24 @@ export class MapService {
       projection: this.view.getProjection(),
     });
 
-    this._setPositionPoint();
-    this._setGeolocationEvents();
-    this._setLayerGeolocation();
-  }
-
-  /**
-   * initialization events geolocation
-   */
-  private _setGeolocationEvents() {
-
+    /** geolocation events */
     this.geolocation.on('change', () => {
       this.geolocation_result = {
-          accuracy: this.geolocation.getAccuracy() + ' [m]',
-          altitude: this.geolocation.getAltitude() + ' [m]',
-          altitudeAccuracy: this.geolocation.getAltitudeAccuracy() + ' [m]',
-          heading: this.geolocation.getHeading() + ' [rad]',
-          speed: this.geolocation.getSpeed() + ' [m/s]'
+          accuracy: this._getGeolocationValue(this.geolocation.getAccuracy(), 'm'),
+          altitude: this._getGeolocationValue(this.geolocation.getAltitude(), 'm'),
+          altitudeAccuracy: this._getGeolocationValue(this.geolocation.getAltitudeAccuracy(), 'm'),
+          heading: this._getGeolocationValue(this.geolocation.getHeading(), 'rad'),
+          speed: this._getGeolocationValue(this.geolocation.getSpeed(), 'm/s')
       };
       this.geolocation_change.emit(this.geolocation_result);
-    });
-
-    this.geolocation.on('change:accuracyGeometry', () => {
-      this.accuracyFeature.setGeometry(this.geolocation.getAccuracyGeometry());
     });
 
     /** change position */
     this.geolocation.on('change:position', () => {
       this.coordinates = this.geolocation.getPosition();
       if (this.coordinates != null && this.coordinates != undefined) {
-        const newPoint: Point = new Point(this.coordinates);
-        this.positionFeature.setGeometry(newPoint);
+        // const newPoint: Point = new Point(this.coordinates);
+        this.newPositionIcon(this.coordinates, 0)
         this.geolocation_position.emit(this.coordinates);
       }
     });
@@ -216,6 +255,11 @@ export class MapService {
     this.geolocation.on('error', (error: any) => {
       this.geolocation_error.emit(error.message);
     });
+
+  }
+
+  private _getGeolocationValue(value: any, um: any): string {
+    return value == null || value == undefined ? '' : `${value} [${um}]`;
   }
 
   /**
@@ -233,6 +277,7 @@ export class MapService {
   public enableGeolocation(enable: boolean) {
     this.isGeolocation = enable;
     this.geolocation.setTracking(enable);
+    this._setVisibleIconLayer(enable);
   }
 
   /**
