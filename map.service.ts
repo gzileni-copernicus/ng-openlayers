@@ -34,6 +34,9 @@ export class MapService {
   public geolocation_error = new EventEmitter<string>();
   public geolocation_position = new EventEmitter<any>();
 
+  protected _mapMoveStart = new Subject<void>();
+  public mapMoveStart = this._mapMoveStart.asObservable();
+
   geolocation_result: GeolocationResult = {
     accuracy: '',
     altitude: '',
@@ -58,9 +61,6 @@ export class MapService {
   coordinates: any = null;
 
   bboxLayer!: any;
-
-  public geolocationSubject: any = new Subject();
-  public heighSubject: any = new Subject();
 
   public icon_source: any;
   public icon_layer: any;
@@ -103,6 +103,10 @@ export class MapService {
       layers: [raster],
       view: this.view
     });
+
+    this.map.on('movestart', () => {
+      this._mapMoveStart.next()
+    })
 
     this._initGeolocation();
 
